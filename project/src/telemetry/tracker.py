@@ -84,7 +84,7 @@ class TelemetryTracker:
             "prompt_text": prompt_text,
             "prompt_id": prompt_id,
             "prompt_version": prompt_version,
-            "metadata": metadata or {},
+            "extra_metadata": metadata or {},
             "tags": tags or [],
             "is_error": False,
         }
@@ -236,7 +236,7 @@ class _TelemetryContext:
     
     def add_metadata(self, key: str, value: Any):
         """Add metadata field."""
-        self.data["metadata"][key] = value
+        self.data["extra_metadata"][key] = value
     
     def add_tag(self, tag: str):
         """Add a tag."""

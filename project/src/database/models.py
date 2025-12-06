@@ -65,7 +65,7 @@ class TelemetryLog(Base):
     error_message = Column(Text, nullable=True)
     
     # Additional Metadata
-    metadata = Column(JSON, nullable=True)
+    extra_metadata = Column(JSON, nullable=True)
     tags = Column(JSON, nullable=True)  # For categorization
     
     # Relationships
@@ -211,7 +211,7 @@ class Alert(Base):
     is_resolved = Column(Boolean, default=False, index=True)
     
     # Additional Data
-    metadata = Column(JSON, nullable=True)
+    extra_metadata = Column(JSON, nullable=True)
 
 
 class OptimizationRun(Base):

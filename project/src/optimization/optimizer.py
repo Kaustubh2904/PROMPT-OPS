@@ -95,6 +95,17 @@ class PromptManager:
             session.add(prompt_version)
             session.flush()
             
+            # Eagerly load all attributes before session closes
+            _ = (prompt_version.id, prompt_version.prompt_id, prompt_version.version,
+                 prompt_version.template, prompt_version.variables, prompt_version.name,
+                 prompt_version.description, prompt_version.created_at, prompt_version.is_active,
+                 prompt_version.is_default, prompt_version.total_calls, prompt_version.avg_latency_ms,
+                 prompt_version.avg_cost_usd, prompt_version.avg_quality_score,
+                 prompt_version.success_rate, prompt_version.ab_test_group,
+                 prompt_version.traffic_weight)
+            # Expunge from session to make it independent
+            session.expunge(prompt_version)
+            
             logger.info(f"Created prompt version: {prompt_id} v{next_version}")
             return prompt_version
     
@@ -127,22 +138,41 @@ class PromptManager:
             if not versions:
                 return None
             
+            # Select the appropriate version
+            selected_version = None
+            
             # If not A/B testing, return default or first version
             if not ab_testing:
                 default = next((v for v in versions if v.is_default), None)
-                return default or versions[0]
+                selected_version = default or versions[0]
+            else:
+                # A/B testing: weighted random selection
+                total_weight = sum(v.traffic_weight for v in versions)
+                rand_value = random.uniform(0, total_weight)
+                
+                cumulative_weight = 0
+                for version in versions:
+                    cumulative_weight += version.traffic_weight
+                    if rand_value <= cumulative_weight:
+                        selected_version = version
+                        break
+                
+                if not selected_version:
+                    selected_version = versions[0]  # Fallback
             
-            # A/B testing: weighted random selection
-            total_weight = sum(v.traffic_weight for v in versions)
-            rand_value = random.uniform(0, total_weight)
+            # Eagerly load all attributes before session closes
+            if selected_version:
+                _ = (selected_version.id, selected_version.prompt_id, selected_version.version,
+                     selected_version.template, selected_version.variables, selected_version.name,
+                     selected_version.description, selected_version.created_at, selected_version.is_active,
+                     selected_version.is_default, selected_version.total_calls, selected_version.avg_latency_ms,
+                     selected_version.avg_cost_usd, selected_version.avg_quality_score,
+                     selected_version.success_rate, selected_version.ab_test_group,
+                     selected_version.traffic_weight)
+                # Expunge from session to make it independent
+                session.expunge(selected_version)
             
-            cumulative_weight = 0
-            for version in versions:
-                cumulative_weight += version.traffic_weight
-                if rand_value <= cumulative_weight:
-                    return version
-            
-            return versions[0]  # Fallback
+            return selected_version
     
     def get_prompt_versions(
         self,
@@ -167,7 +197,20 @@ class PromptManager:
             if active_only:
                 query = query.filter(PromptVersion.is_active == True)
             
-            return query.order_by(PromptVersion.version.desc()).all()
+            versions = query.order_by(PromptVersion.version.desc()).all()
+            
+            # Eagerly load all attributes to avoid DetachedInstanceError
+            for version in versions:
+                # Access all attributes to load them before session closes
+                _ = (version.id, version.prompt_id, version.version, version.template,
+                     version.variables, version.name, version.description, version.created_at,
+                     version.is_active, version.is_default, version.total_calls,
+                     version.avg_latency_ms, version.avg_cost_usd, version.avg_quality_score,
+                     version.success_rate, version.ab_test_group, version.traffic_weight)
+                # Expunge from session to make it independent
+                session.expunge(version)
+            
+            return versions
     
     def update_prompt_metrics(self, prompt_id: str, version: int):
         """

@@ -5,10 +5,15 @@ This module handles all configuration settings for the telemetry system.
 It uses pydantic for validation and python-dotenv for environment variables.
 """
 
+import os
 from typing import Optional
 from pydantic_settings import BaseSettings
 from pydantic import Field, validator
 from pathlib import Path
+
+
+# Get the project root directory (parent of config folder)
+PROJECT_ROOT = Path(__file__).parent.parent.absolute()
 
 
 class Settings(BaseSettings):
@@ -25,7 +30,7 @@ class Settings(BaseSettings):
     
     # Database
     database_url: str = Field(
-        "sqlite:///./telemetry.db",
+        default_factory=lambda: f"sqlite:///{PROJECT_ROOT}/telemetry.db",
         env="DATABASE_URL",
         description="Database connection string"
     )

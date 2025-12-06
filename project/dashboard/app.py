@@ -5,12 +5,19 @@ This is the main dashboard application that provides a web interface
 for monitoring models, viewing metrics, and managing prompts.
 """
 
+import os
+import sys
 import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
 from typing import List, Dict
+
+# Add project root to Python path
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
 
 from src.monitoring import monitor
 from src.optimization import prompt_manager, prompt_optimizer, OptimizationGoal

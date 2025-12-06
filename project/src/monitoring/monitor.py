@@ -242,7 +242,19 @@ class ModelMonitor:
             if model_name:
                 query = query.filter(Alert.model_name == model_name)
             
-            return query.order_by(Alert.triggered_at.desc()).all()
+            alerts = query.order_by(Alert.triggered_at.desc()).all()
+            
+            # Eagerly load all attributes to avoid DetachedInstanceError
+            for alert in alerts:
+                # Access all attributes to load them before session closes
+                _ = (alert.id, alert.alert_type, alert.severity, alert.triggered_at,
+                     alert.resolved_at, alert.model_name, alert.prompt_id, alert.message,
+                     alert.threshold_value, alert.actual_value, alert.is_resolved,
+                     alert.extra_metadata)
+                # Expunge from session to make it independent
+                session.expunge(alert)
+            
+            return alerts
     
     def resolve_alert(self, alert_id: int):
         """
