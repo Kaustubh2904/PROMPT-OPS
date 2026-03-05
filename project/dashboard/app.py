@@ -7,6 +7,8 @@ for monitoring models, viewing metrics, and managing prompts.
 
 import os
 import sys
+import json
+import urllib.request
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -27,34 +29,116 @@ from src.database import init_database, TelemetryLog, PromptVersion, Alert, db_m
 # Page configuration
 st.set_page_config(
     page_title="Telemetry-Aware Model Monitoring",
-    page_icon="📊",
+    page_icon="🤖",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed"
 )
 
-# Custom CSS
+# Modern Custom CSS
 st.markdown("""
 <style>
-    .metric-card {
-        background-color: #f0f2f6;
-        padding: 20px;
-        border-radius: 10px;
-        margin: 10px 0;
+    /* Hide the sidebar expand button for a cleaner app experience */
+    [data-testid="collapsedControl"] {
+        display: none;
     }
+
+    /* Global UI Tweaks */
+    .block-container {
+        padding-top: 2rem !important;
+        max-width: 1400px;
+    }
+    
+    /* Metric Cards */
+    [data-testid="stMetric"] {
+        background-color: #ffffff;
+        text-color: #000000;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        border: 1px solid #f0f2f6;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    [data-testid="stMetric"]:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+    }
+    
+    /* Alert Boxes */
     .alert-high {
-        background-color: #ffebee;
-        padding: 10px;
-        border-left: 4px solid #f44336;
-        margin: 5px 0;
+        background-color: #fff0f0;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 5px solid #ff4b4b;
+        margin: 10px 0;
+        color: #bd1515;
+        font-weight: 500;
     }
     .alert-medium {
-        background-color: #fff3e0;
+        background-color: #fff8e6;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 5px solid #ffa421;
+        margin: 10px 0;
+        color: #b56b00;
+        font-weight: 500;
+    }
+    
+    /* Charts Backgrounds */
+    .js-plotly-plot {
+        background-color: #ffffff;
+        border-radius: 12px;
         padding: 10px;
-        border-left: 4px solid #ff9800;
-        margin: 5px 0;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+        border: 1px solid #f0f2f6;
+    }
+    
+    /* Headers */
+    h1, h2, h3 {
+        color: #1f2937;
+        font-family: inherit;
+        font-weight: 700 !important;
+    }
+    
+    /* Style radio to look like pills when horizontal fallback */
+    div[data-testid="stRadio"] > div {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    div[data-testid="stRadio"] > div > label {
+        background-color: #ffffff;
+        padding: 10px 20px;
+        border-radius: 12px;
+        border: 1px solid #e0e6ed;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+        cursor: pointer;
+        transition: all 0.2s ease-in-out;
+    }
+    div[data-testid="stRadio"] > div > label:hover {
+        border-color: #b0c4de;
+        background-color: #f8fafc;
+        transform: translateY(-1px);
+    }
+    div[data-testid="stRadio"] > div > label > div:first-child {
+        display: none;
+    }
+
+    /* Buttons */
+    .stButton > button {
+        border-radius: 8px;
+        font-weight: 600;
+        transition: all 0.2s ease;
     }
 </style>
 """, unsafe_allow_html=True)
+
+# Load Currency Map
+currency_map_path = os.path.join(os.path.dirname(__file__), "currency_map.json")
+try:
+    with open(currency_map_path, "r", encoding="utf-8") as f:
+        CURRENCY_MAP = json.load(f)
+except Exception:
+    CURRENCY_MAP = {}
 
 
 def init_session_state():
@@ -62,31 +146,82 @@ def init_session_state():
     if 'db_initialized' not in st.session_state:
         init_database()
         st.session_state.db_initialized = True
+    if 'currency' not in st.session_state:
+        st.session_state.currency = 'USD'
+    if 'exchange_rate' not in st.session_state:
+        st.session_state.exchange_rate = 1.0
+
+@st.cache_data(ttl=3600)
+def fetch_exchange_rates():
+    """Fetch live exchange rates from public API."""
+    try:
+        url = "https://open.er-api.com/v6/latest/USD"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            return data.get("rates", {"USD": 1.0})
+    except Exception:
+        return {"USD": 1.0}
 
 
-def sidebar_navigation():
-    """Render sidebar navigation."""
-    st.sidebar.title("🔧 Navigation")
+def render_header_and_nav():
+    """Render the top header, currency selection, and modern navigation."""
+    col_logo, col_title, col_gap, col_currency = st.columns([0.3, 3.5, 2, 2.2])
     
-    page = st.sidebar.radio(
-        "Select Page",
-        [
-            "📊 Dashboard Overview",
-            "📈 Model Monitoring",
-            "🔄 Prompt Management",
-            "🚨 Alerts & Anomalies",
-            "⚙️ Settings"
-        ]
-    )
+    with col_logo:
+        st.markdown("<h1 style='margin:0; padding:0; font-size:2.5rem;'>🤖</h1>", unsafe_allow_html=True)
+        
+    with col_title:
+        st.markdown("<h2 style='margin:0; padding:0; line-height:2.5rem;'>Telemetry-Aware Monitoring</h2>", unsafe_allow_html=True)
+        
+    with col_currency:
+        rates = fetch_exchange_rates()
+        currencies = list(rates.keys())
+        if not currencies:
+            currencies = ["USD"]
+            
+        try:
+            default_idx = currencies.index(st.session_state.currency)
+        except ValueError:
+            default_idx = 0
+            
+        def format_currency(curr_code):
+            return CURRENCY_MAP.get(curr_code, f"{curr_code}")
+
+        selected_currency = st.selectbox(
+            "Currency",
+            currencies,
+            index=default_idx,
+            format_func=format_currency,
+            label_visibility="collapsed"
+        )
+        
+        if selected_currency != st.session_state.currency:
+            st.session_state.currency = selected_currency
+            st.session_state.exchange_rate = rates.get(selected_currency, 1.0)
+            st.rerun()
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    pages = [
+        "📊 Dashboard Overview",
+        "📈 Model Monitoring",
+        "🔄 Prompt Management",
+        "🚨 Alerts & Anomalies",
+        "⚙️ Settings"
+    ]
     
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### About")
-    st.sidebar.info(
-        "**Telemetry-Aware Model Monitoring**\n\n"
-        "Real-time monitoring and optimization for LLM applications.\n\n"
-        "Track performance, optimize prompts, and detect anomalies."
-    )
+    if hasattr(st, "segmented_control"):
+        page = st.segmented_control("Navigation", pages, default=pages[0], label_visibility="collapsed")
+    elif hasattr(st, "pills"):
+        page = st.pills("Navigation", pages, default=pages[0], label_visibility="collapsed")
+    else:
+        page = st.radio("Navigation", pages, horizontal=True, label_visibility="collapsed")
     
+    if not page:
+        page = pages[0]
+        
+    st.markdown("---")
     return page
 
 
@@ -114,7 +249,8 @@ def dashboard_overview():
     
     # Key metrics
     total_requests = sum(m.get("total_requests", 0) for m in models_summary)
-    total_cost = sum(m.get("total_cost_usd", 0) for m in models_summary)
+    total_cost_usd = sum(m.get("total_cost_usd", 0) for m in models_summary)
+    total_cost = total_cost_usd * st.session_state.exchange_rate
     avg_latency = sum(m.get("avg_latency_ms", 0) for m in models_summary) / len(models_summary) if models_summary else 0
     avg_error_rate = sum(m.get("error_rate", 0) for m in models_summary) / len(models_summary) if models_summary else 0
     
@@ -131,7 +267,7 @@ def dashboard_overview():
     with col2:
         st.metric(
             label="Total Cost",
-            value=f"${total_cost:.4f}",
+            value=f"{st.session_state.currency} {total_cost:.4f}",
             delta=None
         )
     
@@ -175,13 +311,13 @@ def dashboard_overview():
         st.subheader("💰 Cost by Model")
         if models_summary:
             df_cost = pd.DataFrame([
-                {"Model": m["model_name"], "Cost": m.get("total_cost_usd", 0)}
+                {"Model": m["model_name"], f"Cost ({st.session_state.currency})": m.get("total_cost_usd", 0) * st.session_state.exchange_rate}
                 for m in models_summary
             ])
             fig = px.pie(
                 df_cost,
                 names="Model",
-                values="Cost",
+                values=f"Cost ({st.session_state.currency})",
                 hole=0.4
             )
             st.plotly_chart(fig, use_container_width=True)
@@ -200,7 +336,7 @@ def dashboard_overview():
                     "Model": log.model_name,
                     "Latency (ms)": f"{log.latency_ms:.0f}" if log.latency_ms else "N/A",
                     "Tokens": log.total_tokens or "N/A",
-                    "Cost": f"${log.cost_usd:.6f}" if log.cost_usd else "N/A",
+                    "Cost": f"{st.session_state.currency} {log.cost_usd * st.session_state.exchange_rate:.6f}" if log.cost_usd else "N/A",
                     "Status": "❌ Error" if log.is_error else "✅ Success"
                 }
                 for log in recent_logs
@@ -273,8 +409,8 @@ def model_monitoring():
     with col4:
         st.metric(
             "Total Cost",
-            f"${stats['total_cost_usd']:.4f}",
-            help="Total cost in USD"
+            f"{st.session_state.currency} {stats['total_cost_usd'] * st.session_state.exchange_rate:.4f}",
+            help=f"Total cost in {st.session_state.currency}"
         )
     
     # Latency distribution
@@ -450,7 +586,7 @@ def prompt_management():
                             if version.avg_latency_ms:
                                 st.metric("Avg Latency", f"{version.avg_latency_ms:.0f}ms")
                             if version.avg_cost_usd:
-                                st.metric("Avg Cost", f"${version.avg_cost_usd:.6f}")
+                                st.metric("Avg Cost", f"{st.session_state.currency} {version.avg_cost_usd * st.session_state.exchange_rate:.6f}")
                             if version.avg_quality_score:
                                 st.metric("Avg Quality", f"{version.avg_quality_score:.2f}")
                         
@@ -580,17 +716,17 @@ def settings_page():
     
     with col1:
         st.number_input(
-            "Latency Threshold (ms)",
+            "Maximum Latency (ms)",
             value=2000,
             step=100,
-            help="Alert when average latency exceeds this value"
+            help="Alert when average latency exceeds this maximum latency threshold"
         )
         
         st.number_input(
-            "Cost Threshold (USD)",
-            value=10.0,
-            step=1.0,
-            help="Alert when total cost exceeds this value"
+            f"Cost Threshold ({st.session_state.currency})",
+            value=10.0 * st.session_state.exchange_rate,
+            step=1.0 * st.session_state.exchange_rate,
+            help=f"Alert when total cost exceeds this value in {st.session_state.currency}"
         )
     
     with col2:
@@ -643,14 +779,22 @@ def settings_page():
     
     with col3:
         st.metric("Total Alerts", f"{total_alerts:,}")
+        
+    st.markdown("---")
+    st.subheader("ℹ️ About")
+    st.info(
+        "**Telemetry-Aware Model Monitoring**\n\n"
+        "Real-time monitoring and optimization for LLM applications.\n\n"
+        "Track performance, optimize prompts, and detect anomalies."
+    )
 
 
 def main():
     """Main application entry point."""
     init_session_state()
     
-    # Sidebar navigation
-    page = sidebar_navigation()
+    # Header and navigation
+    page = render_header_and_nav()
     
     # Route to appropriate page
     if page == "📊 Dashboard Overview":
