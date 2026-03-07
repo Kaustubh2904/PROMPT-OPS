@@ -1,119 +1,160 @@
 """
-Configuration Management Module
+PROMPT-OPS Configuration Module
 
-This module handles all configuration settings for the telemetry system.
-It uses pydantic for validation and python-dotenv for environment variables.
+Centralised settings read from environment variables / .env file.
+Uses pydantic-settings for validation and type coercion.
 """
 
 import os
-from typing import Optional
-from pydantic_settings import BaseSettings
-from pydantic import Field, validator
 from pathlib import Path
+from typing import Optional
+
+from pydantic_settings import BaseSettings
+from pydantic import Field
 
 
-# Get the project root directory (parent of config folder)
-PROJECT_ROOT = Path(__file__).parent.parent.absolute()
+# ── Project root ────────────────────────────────────────────
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 
 class Settings(BaseSettings):
-    """
-    Application settings loaded from environment variables.
-    
-    This class uses Pydantic's BaseSettings to automatically load
-    configuration from .env files and environment variables.
-    """
-    
-    # API Keys
-    openai_api_key: Optional[str] = Field(None, env="OPENAI_API_KEY")
-    anthropic_api_key: Optional[str] = Field(None, env="ANTHROPIC_API_KEY")
-    
-    # Database
-    database_url: str = Field(
-        default_factory=lambda: f"sqlite:///{PROJECT_ROOT}/telemetry.db",
-        env="DATABASE_URL",
-        description="Database connection string"
+    """Application settings loaded from .env file."""
+
+    # ── OpenRouter API ──────────────────────────────────────
+    openrouter_api_key: str = Field(default="", alias="OPENROUTER_API_KEY")
+    openrouter_base_url: str = Field(
+        default="https://openrouter.ai/api/v1",
+        alias="OPENROUTER_BASE_URL",
     )
-    
-    # Telemetry Settings
-    enable_telemetry: bool = Field(True, env="ENABLE_TELEMETRY")
-    enable_prometheus: bool = Field(False, env="ENABLE_PROMETHEUS")
-    prometheus_port: int = Field(8000, env="PROMETHEUS_PORT")
-    
-    # Alert Thresholds
-    latency_threshold_ms: float = Field(2000.0, env="LATENCY_THRESHOLD_MS")
-    error_rate_threshold: float = Field(0.05, env="ERROR_RATE_THRESHOLD")
-    cost_threshold_usd: float = Field(10.0, env="COST_THRESHOLD_USD")
-    
-    # Prompt Optimization
-    auto_optimize_enabled: bool = Field(True, env="AUTO_OPTIMIZE_ENABLED")
-    min_samples_for_optimization: int = Field(10, env="MIN_SAMPLES_FOR_OPTIMIZATION")
-    optimization_interval_hours: int = Field(24, env="OPTIMIZATION_INTERVAL_HOURS")
-    
-    # Logging
-    log_level: str = Field("INFO", env="LOG_LEVEL")
-    log_file: str = Field("logs/telemetry.log", env="LOG_FILE")
-    
-    # Directories
-    data_dir: Path = Field(Path("data"), description="Directory for storing data")
-    logs_dir: Path = Field(Path("logs"), description="Directory for log files")
-    
-    @validator("log_level")
-    def validate_log_level(cls, v):
-        """Validate log level is a valid option."""
-        valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
-        if v.upper() not in valid_levels:
-            raise ValueError(f"Log level must be one of {valid_levels}")
-        return v.upper()
-    
-    @validator("error_rate_threshold")
-    def validate_error_rate(cls, v):
-        """Validate error rate is between 0 and 1."""
-        if not 0 <= v <= 1:
-            raise ValueError("Error rate threshold must be between 0 and 1")
-        return v
-    
-    def create_directories(self):
-        """Create necessary directories if they don't exist."""
-        self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.logs_dir.mkdir(parents=True, exist_ok=True)
-    
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
+    openrouter_default_model: str = Field(
+        default="meta-llama/llama-3.3-8b-instruct:free",
+        alias="OPENROUTER_DEFAULT_MODEL",
+    )
+    openrouter_judge_model: str = Field(
+        default="meta-llama/llama-3.3-8b-instruct:free",
+        alias="OPENROUTER_JUDGE_MODEL",
+    )
+
+    # ── Database ────────────────────────────────────────────
+    database_url: str = Field(
+        default=f"sqlite:///{PROJECT_ROOT / 'data' / 'prompt_ops.db'}",
+        alias="DATABASE_URL",
+    )
+
+    # ── Telemetry ───────────────────────────────────────────
+    enable_telemetry: bool = Field(default=True, alias="ENABLE_TELEMETRY")
+
+    # ── Alert thresholds ────────────────────────────────────
+    latency_threshold_ms: float = Field(default=5000.0, alias="LATENCY_THRESHOLD_MS")
+    error_rate_threshold: float = Field(default=0.10, alias="ERROR_RATE_THRESHOLD")
+    cost_threshold_usd: float = Field(default=1.0, alias="COST_THRESHOLD_USD")
+
+    # ── Optimisation ────────────────────────────────────────
+    auto_optimize_enabled: bool = Field(default=True, alias="AUTO_OPTIMIZE_ENABLED")
+    min_samples_for_optimization: int = Field(default=5, alias="MIN_SAMPLES_FOR_OPTIMIZATION")
+
+    # ── Temperature optimisation ────────────────────────────
+    temperature_min: float = Field(default=0.0, alias="TEMPERATURE_MIN")
+    temperature_max: float = Field(default=1.5, alias="TEMPERATURE_MAX")
+    temperature_step: float = Field(default=0.5, alias="TEMPERATURE_STEP")
+    temperature_trials_per_step: int = Field(default=2, alias="TEMPERATURE_TRIALS_PER_STEP")
+
+    # ── Cost routing ────────────────────────────────────────
+    cost_routing_enabled: bool = Field(default=True, alias="COST_ROUTING_ENABLED")
+    quality_threshold_for_downgrade: float = Field(
+        default=0.6, alias="QUALITY_THRESHOLD_FOR_DOWNGRADE"
+    )
+
+    # ── Evaluation ──────────────────────────────────────────
+    auto_evaluate: bool = Field(default=True, alias="AUTO_EVALUATE")
+    evaluation_sample_rate: float = Field(default=1.0, alias="EVALUATION_SAMPLE_RATE")
+
+    # ── Feedback loop ───────────────────────────────────────
+    feedback_loop_enabled: bool = Field(default=True, alias="FEEDBACK_LOOP_ENABLED")
+    auto_promote_threshold: float = Field(default=0.15, alias="AUTO_PROMOTE_THRESHOLD")
+    auto_retire_threshold: float = Field(default=0.20, alias="AUTO_RETIRE_THRESHOLD")
+
+    # ── Logging ─────────────────────────────────────────────
+    log_level: str = Field(default="INFO", alias="LOG_LEVEL")
+
+    model_config = {
+        "env_file": str(PROJECT_ROOT / ".env"),
+        "env_file_encoding": "utf-8",
+        "extra": "ignore",
+        "populate_by_name": True,
+    }
 
 
-# Global settings instance
+# ── Singleton settings instance ─────────────────────────────
 settings = Settings()
-settings.create_directories()
 
 
-# Model pricing configuration (cost per 1K tokens)
+# ── Free models available on OpenRouter ─────────────────────
+FREE_MODELS = [
+    "google/gemma-3-4b-it:free",                         # Tier 1 – small
+    "qwen/qwen3-8b:free",                                # Tier 2 – mid
+    "meta-llama/llama-3.3-8b-instruct:free",              # Tier 2 – mid (default)
+    "mistralai/mistral-small-3.1-24b-instruct:free",      # Tier 3 – larger
+    "deepseek/deepseek-chat-v3-0324:free",                # Tier 3 – larger
+    "microsoft/phi-4-reasoning:free",                     # Tier 4 – strongest
+]
+
+
+# ── Model tiers for cost-aware routing ──────────────────────
+MODEL_TIERS = {
+    "tier_1": [
+        "google/gemma-3-4b-it:free",
+    ],
+    "tier_2": [
+        "qwen/qwen3-8b:free",
+        "meta-llama/llama-3.3-8b-instruct:free",
+    ],
+    "tier_3": [
+        "mistralai/mistral-small-3.1-24b-instruct:free",
+        "deepseek/deepseek-chat-v3-0324:free",
+    ],
+    "tier_4": [
+        "microsoft/phi-4-reasoning:free",
+    ],
+    "premium": [
+        "openai/gpt-4o",
+        "anthropic/claude-sonnet-4",
+        "google/gemini-2.5-pro-preview",
+    ],
+}
+
+
+# ── Model pricing (per 1 000 tokens) ───────────────────────
+# Free models all cost $0.  Premium models have real prices.
 MODEL_PRICING = {
-    "gpt-4": {"input": 0.03, "output": 0.06},
-    "gpt-4-turbo": {"input": 0.01, "output": 0.03},
-    "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
-    "gpt-3.5-turbo-16k": {"input": 0.003, "output": 0.004},
-    "claude-3-opus": {"input": 0.015, "output": 0.075},
-    "claude-3-sonnet": {"input": 0.003, "output": 0.015},
-    "claude-3-haiku": {"input": 0.00025, "output": 0.00125},
+    # Free tier – $0
+    "google/gemma-3-4b-it:free":                       {"input": 0.0, "output": 0.0},
+    "qwen/qwen3-8b:free":                              {"input": 0.0, "output": 0.0},
+    "meta-llama/llama-3.3-8b-instruct:free":            {"input": 0.0, "output": 0.0},
+    "mistralai/mistral-small-3.1-24b-instruct:free":    {"input": 0.0, "output": 0.0},
+    "deepseek/deepseek-chat-v3-0324:free":              {"input": 0.0, "output": 0.0},
+    "microsoft/phi-4-reasoning:free":                   {"input": 0.0, "output": 0.0},
+    # Premium tier – approximate $/1k tokens
+    "openai/gpt-4o":                                   {"input": 0.005, "output": 0.015},
+    "openai/gpt-4o-mini":                              {"input": 0.00015, "output": 0.0006},
+    "anthropic/claude-sonnet-4":                        {"input": 0.003, "output": 0.015},
+    "google/gemini-2.0-flash-001":                     {"input": 0.0001, "output": 0.0004},
+    "google/gemini-2.5-pro-preview":                   {"input": 0.00125, "output": 0.01},
 }
 
 
 def get_model_cost(model: str, input_tokens: int, output_tokens: int) -> float:
     """
-    Calculate the cost of a model call based on token usage.
-    
+    Calculate the cost of an LLM call.
+
     Args:
-        model: Model name
-        input_tokens: Number of input tokens
-        output_tokens: Number of output tokens
-        
+        model: Model identifier (e.g. "openai/gpt-4o")
+        input_tokens: Number of prompt tokens
+        output_tokens: Number of completion tokens
+
     Returns:
-        Total cost in USD
+        Estimated cost in USD
     """
-    pricing = MODEL_PRICING.get(model, {"input": 0.0, "output": 0.0})
-    input_cost = (input_tokens / 1000) * pricing["input"]
-    output_cost = (output_tokens / 1000) * pricing["output"]
-    return input_cost + output_cost
+    pricing = MODEL_PRICING.get(model, {"input": 0.001, "output": 0.002})
+    cost = (input_tokens / 1000) * pricing["input"] + (output_tokens / 1000) * pricing["output"]
+    return round(cost, 8)

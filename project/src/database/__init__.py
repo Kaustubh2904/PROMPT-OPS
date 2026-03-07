@@ -6,7 +6,10 @@ from .models import (
     PromptVersion,
     ModelMetrics,
     Alert,
-    OptimizationRun
+    OptimizationRun,
+    EvaluationResult,
+    TemperatureExperiment,
+    CostRoutingLog,
 )
 from .connection import (
     DatabaseManager,
@@ -22,6 +25,9 @@ __all__ = [
     "ModelMetrics",
     "Alert",
     "OptimizationRun",
+    "EvaluationResult",
+    "TemperatureExperiment",
+    "CostRoutingLog",
     "DatabaseManager",
     "db_manager",
     "init_database",

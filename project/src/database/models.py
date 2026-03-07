@@ -250,3 +250,98 @@ class OptimizationRun(Base):
     # Details
     strategy_used = Column(String(100))  # What optimization strategy was used
     details = Column(JSON, nullable=True)
+
+
+class EvaluationResult(Base):
+    """
+    Stores LLM-as-Judge evaluation results.
+    
+    Each row is an automated quality assessment of one LLM response.
+    This is the key data that closes the feedback loop.
+    """
+    __tablename__ = "evaluation_results"
+
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Link to the original request
+    request_id = Column(String(100), index=True)
+    prompt_id = Column(String(100), index=True, nullable=True)
+    prompt_version = Column(Integer, nullable=True)
+    model_name = Column(String(100), index=True)
+    
+    # Evaluation scores (0.0 - 1.0)
+    relevance = Column(Float)
+    accuracy = Column(Float)
+    completeness = Column(Float)
+    format_compliance = Column(Float)
+    safety = Column(Float)
+    composite_score = Column(Float, index=True)
+    
+    # Judge metadata
+    reasoning = Column(Text, nullable=True)
+    judge_model = Column(String(100))
+    judge_latency_ms = Column(Float, nullable=True)
+    judge_cost_usd = Column(Float, nullable=True)
+    
+    # Timestamps
+    evaluated_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class TemperatureExperiment(Base):
+    """
+    Records temperature optimization experiments.
+    
+    Each row is a complete experiment testing multiple temperature
+    values for a specific prompt.
+    """
+    __tablename__ = "temperature_experiments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    
+    experiment_id = Column(String(100), unique=True, index=True)
+    prompt_id = Column(String(100), index=True)
+    model_name = Column(String(100))
+    
+    # Results
+    best_temperature = Column(Float)
+    best_quality_score = Column(Float)
+    total_trials = Column(Integer)
+    total_cost_usd = Column(Float)
+    
+    # Detailed results per temperature (JSON)
+    results_json = Column(JSON, nullable=True)
+    
+    # Timestamps & status
+    started_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+    status = Column(String(20), index=True)  # running, completed, failed
+
+
+class CostRoutingLog(Base):
+    """
+    Logs cost-aware routing decisions.
+    
+    Tracks when requests were downgraded to cheaper models
+    and the quality/cost outcomes.
+    """
+    __tablename__ = "cost_routing_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    
+    routing_id = Column(String(100), unique=True, index=True)
+    prompt_id = Column(String(100), index=True, nullable=True)
+    
+    # Routing decision
+    original_model = Column(String(100))
+    routed_model = Column(String(100))
+    tier_used = Column(String(50))
+    
+    # Outcome
+    quality_score = Column(Float, nullable=True)
+    escalated = Column(Boolean, default=False)
+    escalation_reason = Column(Text, nullable=True)
+    cost_saved_usd = Column(Float, default=0.0)
+    latency_ms = Column(Float, nullable=True)
+    
+    # Timestamp
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
