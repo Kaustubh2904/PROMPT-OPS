@@ -20,8 +20,13 @@ Usage:
 
 import os
 import sys
+<<<<<<< HEAD
 import time
 
+=======
+import json
+import urllib.request
+>>>>>>> 5edcce0d2c7c8aae652a9ab458063df896f7212f
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -47,6 +52,7 @@ prompt_manager = PromptManager()
 
 # ── page config ─────────────────────────────────────────────
 st.set_page_config(
+<<<<<<< HEAD
     page_title="PROMPT-OPS",
     page_icon="⚡",
     layout="wide",
@@ -71,32 +77,211 @@ st.markdown("""
         padding-bottom: 4px;
         border-bottom: 2px solid #667eea;
         display: inline-block;
+=======
+    page_title="Telemetry-Aware Model Monitoring",
+    page_icon="🤖",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+# Modern Custom CSS
+st.markdown("""
+<style>
+    /* Hide the sidebar expand button for a cleaner app experience */
+    [data-testid="collapsedControl"] {
+        display: none;
+>>>>>>> 5edcce0d2c7c8aae652a9ab458063df896f7212f
     }
+
+    /* Global UI Tweaks */
+    .block-container {
+        padding-top: 2rem !important;
+        max-width: 1400px;
+    }
+    
+    /* Metric Cards */
+    [data-testid="stMetric"] {
+        background-color: #ffffff;
+        text-color: #000000;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+        border: 1px solid #f0f2f6;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+    [data-testid="stMetric"]:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+    }
+    
+    /* Alert Boxes */
     .alert-high {
-        background-color: #ffebee;
-        padding: 10px;
-        border-left: 4px solid #f44336;
-        margin: 5px 0;
+        background-color: #fff0f0;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 5px solid #ff4b4b;
+        margin: 10px 0;
+        color: #bd1515;
+        font-weight: 500;
     }
     .alert-medium {
-        background-color: #fff3e0;
+        background-color: #fff8e6;
+        padding: 15px;
+        border-radius: 10px;
+        border-left: 5px solid #ffa421;
+        margin: 10px 0;
+        color: #b56b00;
+        font-weight: 500;
+    }
+    
+    /* Charts Backgrounds */
+    .js-plotly-plot {
+        background-color: #ffffff;
+        border-radius: 12px;
         padding: 10px;
-        border-left: 4px solid #ff9800;
-        margin: 5px 0;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.03);
+        border: 1px solid #f0f2f6;
+    }
+    
+    /* Headers */
+    h1, h2, h3 {
+        color: #1f2937;
+        font-family: inherit;
+        font-weight: 700 !important;
+    }
+    
+    /* Style radio to look like pills when horizontal fallback */
+    div[data-testid="stRadio"] > div {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    div[data-testid="stRadio"] > div > label {
+        background-color: #ffffff;
+        padding: 10px 20px;
+        border-radius: 12px;
+        border: 1px solid #e0e6ed;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.02);
+        cursor: pointer;
+        transition: all 0.2s ease-in-out;
+    }
+    div[data-testid="stRadio"] > div > label:hover {
+        border-color: #b0c4de;
+        background-color: #f8fafc;
+        transform: translateY(-1px);
+    }
+    div[data-testid="stRadio"] > div > label > div:first-child {
+        display: none;
+    }
+
+    /* Buttons */
+    .stButton > button {
+        border-radius: 8px;
+        font-weight: 600;
+        transition: all 0.2s ease;
     }
 </style>
 """, unsafe_allow_html=True)
+
+# Load Currency Map
+currency_map_path = os.path.join(os.path.dirname(__file__), "currency_map.json")
+try:
+    with open(currency_map_path, "r", encoding="utf-8") as f:
+        CURRENCY_MAP = json.load(f)
+except Exception:
+    CURRENCY_MAP = {}
 
 
 # ── helpers ─────────────────────────────────────────────────
 def _init():
     if "db_ok" not in st.session_state:
         init_database()
+<<<<<<< HEAD
         st.session_state.db_ok = True
 
 
 def _hdr(text: str):
     st.markdown(f'<div class="section-hdr">{text}</div>', unsafe_allow_html=True)
+=======
+        st.session_state.db_initialized = True
+    if 'currency' not in st.session_state:
+        st.session_state.currency = 'USD'
+    if 'exchange_rate' not in st.session_state:
+        st.session_state.exchange_rate = 1.0
+
+@st.cache_data(ttl=3600)
+def fetch_exchange_rates():
+    """Fetch live exchange rates from public API."""
+    try:
+        url = "https://open.er-api.com/v6/latest/USD"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=5) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            return data.get("rates", {"USD": 1.0})
+    except Exception:
+        return {"USD": 1.0}
+
+
+def render_header_and_nav():
+    """Render the top header, currency selection, and modern navigation."""
+    col_logo, col_title, col_gap, col_currency = st.columns([0.3, 3.5, 2, 2.2])
+    
+    with col_logo:
+        st.markdown("<h1 style='margin:0; padding:0; font-size:2.5rem;'>🤖</h1>", unsafe_allow_html=True)
+        
+    with col_title:
+        st.markdown("<h2 style='margin:0; padding:0; line-height:2.5rem;'>Telemetry-Aware Monitoring</h2>", unsafe_allow_html=True)
+        
+    with col_currency:
+        rates = fetch_exchange_rates()
+        currencies = list(rates.keys())
+        if not currencies:
+            currencies = ["USD"]
+            
+        try:
+            default_idx = currencies.index(st.session_state.currency)
+        except ValueError:
+            default_idx = 0
+            
+        def format_currency(curr_code):
+            return CURRENCY_MAP.get(curr_code, f"{curr_code}")
+
+        selected_currency = st.selectbox(
+            "Currency",
+            currencies,
+            index=default_idx,
+            format_func=format_currency,
+            label_visibility="collapsed"
+        )
+        
+        if selected_currency != st.session_state.currency:
+            st.session_state.currency = selected_currency
+            st.session_state.exchange_rate = rates.get(selected_currency, 1.0)
+            st.rerun()
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    pages = [
+        "📊 Dashboard Overview",
+        "📈 Model Monitoring",
+        "🔄 Prompt Management",
+        "🚨 Alerts & Anomalies",
+        "⚙️ Settings"
+    ]
+    
+    if hasattr(st, "segmented_control"):
+        page = st.segmented_control("Navigation", pages, default=pages[0], label_visibility="collapsed")
+    elif hasattr(st, "pills"):
+        page = st.pills("Navigation", pages, default=pages[0], label_visibility="collapsed")
+    else:
+        page = st.radio("Navigation", pages, horizontal=True, label_visibility="collapsed")
+    
+    if not page:
+        page = pages[0]
+        
+    st.markdown("---")
+    return page
+>>>>>>> 5edcce0d2c7c8aae652a9ab458063df896f7212f
 
 
 def _rows_to_dicts(rows):
@@ -150,7 +335,49 @@ def page_dashboard_overview():
             "the system with real LLM calls, then come back here."
         )
         return
+<<<<<<< HEAD
 
+=======
+    
+    # Key metrics
+    total_requests = sum(m.get("total_requests", 0) for m in models_summary)
+    total_cost_usd = sum(m.get("total_cost_usd", 0) for m in models_summary)
+    total_cost = total_cost_usd * st.session_state.exchange_rate
+    avg_latency = sum(m.get("avg_latency_ms", 0) for m in models_summary) / len(models_summary) if models_summary else 0
+    avg_error_rate = sum(m.get("error_rate", 0) for m in models_summary) / len(models_summary) if models_summary else 0
+    
+    # Display key metrics
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            label="Total Requests",
+            value=f"{total_requests:,}",
+            delta=None
+        )
+    
+    with col2:
+        st.metric(
+            label="Total Cost",
+            value=f"{st.session_state.currency} {total_cost:.4f}",
+            delta=None
+        )
+    
+    with col3:
+        st.metric(
+            label="Avg Latency",
+            value=f"{avg_latency:.0f}ms",
+            delta=None
+        )
+    
+    with col4:
+        st.metric(
+            label="Error Rate",
+            value=f"{avg_error_rate:.2%}",
+            delta=None
+        )
+    
+>>>>>>> 5edcce0d2c7c8aae652a9ab458063df896f7212f
     st.markdown("---")
 
     # Models summary chart
@@ -163,6 +390,7 @@ def page_dashboard_overview():
                 {"Model": m["model_name"], "Requests": m["total_requests"]}
                 for m in summaries
             ])
+<<<<<<< HEAD
             fig = px.bar(df, x="Model", y="Requests", color="Requests",
                          color_continuous_scale="Blues")
             fig.update_layout(showlegend=False, height=300, margin=dict(t=10, b=10))
@@ -178,6 +406,33 @@ def page_dashboard_overview():
             fig.update_layout(height=300, margin=dict(t=10, b=10))
             st.plotly_chart(fig, width='stretch')
 
+=======
+            fig = px.bar(
+                df_requests,
+                x="Model",
+                y="Requests",
+                color="Requests",
+                color_continuous_scale="Blues"
+            )
+            fig.update_layout(showlegend=False)
+            st.plotly_chart(fig, use_container_width=True)
+    
+    with col2:
+        st.subheader("💰 Cost by Model")
+        if models_summary:
+            df_cost = pd.DataFrame([
+                {"Model": m["model_name"], f"Cost ({st.session_state.currency})": m.get("total_cost_usd", 0) * st.session_state.exchange_rate}
+                for m in models_summary
+            ])
+            fig = px.pie(
+                df_cost,
+                names="Model",
+                values=f"Cost ({st.session_state.currency})",
+                hole=0.4
+            )
+            st.plotly_chart(fig, use_container_width=True)
+    
+>>>>>>> 5edcce0d2c7c8aae652a9ab458063df896f7212f
     # Recent activity
     st.markdown("---")
     _hdr("📋 Recent Activity")
@@ -192,6 +447,7 @@ def page_dashboard_overview():
         st.dataframe(
             pd.DataFrame([
                 {
+<<<<<<< HEAD
                     "Time": r["timestamp"].strftime("%H:%M:%S") if r["timestamp"] else "—",
                     "Model": r["model_name"] or "—",
                     "Prompt": r["prompt_id"] or "—",
@@ -199,6 +455,14 @@ def page_dashboard_overview():
                     "Tokens": r["total_tokens"] or "—",
                     "Quality": f"{r['quality_score']:.2f}" if r["quality_score"] else "—",
                     "Status": "❌" if r["is_error"] else "✅",
+=======
+                    "Time": log.timestamp.strftime("%H:%M:%S"),
+                    "Model": log.model_name,
+                    "Latency (ms)": f"{log.latency_ms:.0f}" if log.latency_ms else "N/A",
+                    "Tokens": log.total_tokens or "N/A",
+                    "Cost": f"{st.session_state.currency} {log.cost_usd * st.session_state.exchange_rate:.6f}" if log.cost_usd else "N/A",
+                    "Status": "❌ Error" if log.is_error else "✅ Success"
+>>>>>>> 5edcce0d2c7c8aae652a9ab458063df896f7212f
                 }
                 for r in recent
             ]),
@@ -235,6 +499,7 @@ def page_model_monitoring():
     if stats.get("total_requests", 0) == 0:
         st.info(f"No data for {selected_model} in this window.")
         return
+<<<<<<< HEAD
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Total Requests", f"{stats['total_requests']:,}")
@@ -243,6 +508,46 @@ def page_model_monitoring():
     c4.metric("Total Cost", f"${stats['total_cost_usd']:.4f}" if stats.get("total_cost_usd") else "$0")
 
     st.markdown("---")
+=======
+    
+    # Display metrics
+    st.subheader("📊 Performance Metrics")
+    
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            "Total Requests",
+            f"{stats['total_requests']:,}",
+            help="Total number of API calls"
+        )
+    
+    with col2:
+        st.metric(
+            "Success Rate",
+            f"{stats['success_rate']:.1%}",
+            delta=f"{stats['success_rate']-0.95:.1%}",
+            help="Percentage of successful requests"
+        )
+    
+    with col3:
+        st.metric(
+            "Avg Latency",
+            f"{stats['avg_latency_ms']:.0f}ms",
+            help="Average response time"
+        )
+    
+    with col4:
+        st.metric(
+            "Total Cost",
+            f"{st.session_state.currency} {stats['total_cost_usd'] * st.session_state.exchange_rate:.4f}",
+            help=f"Total cost in {st.session_state.currency}"
+        )
+    
+    # Latency distribution
+    st.subheader("⏱️ Latency Analysis")
+    
+>>>>>>> 5edcce0d2c7c8aae652a9ab458063df896f7212f
     col1, col2 = st.columns(2)
     with col1:
         _hdr("⏱️ Latency Percentiles")
@@ -458,11 +763,54 @@ def page_prompt_management():
 
     # ── View / A-B test ─────────────────────────────────────
     with tab2:
+<<<<<<< HEAD
         with db_manager.session_scope() as s:
             prompt_ids = [r[0] for r in s.query(PromptVersion.prompt_id).distinct().all()]
 
         if not prompt_ids:
             st.info("No prompts yet — create one in the Create tab.")
+=======
+        st.subheader("View Prompt Versions")
+        
+        with db_manager.session_scope() as session:
+            prompts = session.query(PromptVersion.prompt_id).distinct().all()
+            prompt_ids = [p[0] for p in prompts]
+        
+        if prompt_ids:
+            selected_prompt = st.selectbox("Select Prompt", prompt_ids)
+            
+            versions = prompt_manager.get_prompt_versions(selected_prompt)
+            
+            if versions:
+                for version in versions:
+                    with st.expander(
+                        f"Version {version.version} - {version.name} "
+                        f"{'✅ (Active)' if version.is_active else '❌ (Inactive)'}"
+                    ):
+                        col1, col2 = st.columns([2, 1])
+                        
+                        with col1:
+                            st.markdown(f"**Template:**")
+                            st.code(version.template, language=None)
+                            
+                            if version.description:
+                                st.markdown(f"**Description:** {version.description}")
+                        
+                        with col2:
+                            st.markdown("**Metrics:**")
+                            st.metric("Total Calls", version.total_calls or 0)
+                            if version.avg_latency_ms:
+                                st.metric("Avg Latency", f"{version.avg_latency_ms:.0f}ms")
+                            if version.avg_cost_usd:
+                                st.metric("Avg Cost", f"{st.session_state.currency} {version.avg_cost_usd * st.session_state.exchange_rate:.6f}")
+                            if version.avg_quality_score:
+                                st.metric("Avg Quality", f"{version.avg_quality_score:.2f}")
+                        
+                        if version.is_active:
+                            if st.button(f"Deactivate v{version.version}"):
+                                prompt_manager.deactivate_version(selected_prompt, version.version)
+                                st.rerun()
+>>>>>>> 5edcce0d2c7c8aae652a9ab458063df896f7212f
         else:
             for pid in prompt_ids:
                 versions = prompt_manager.get_prompt_versions(pid, active_only=True)
@@ -794,6 +1142,7 @@ def page_alerts():
         st.info("No resolved alerts")
 
 
+<<<<<<< HEAD
 # ═══════════════════════════════════════════════════════════
 #  PAGE: SETTINGS
 # ═══════════════════════════════════════════════════════════
@@ -809,6 +1158,42 @@ def page_settings():
         st.number_input("Error Rate Threshold", value=settings.error_rate_threshold,
                         min_value=0.0, max_value=1.0, step=0.01, format="%.2f")
 
+=======
+def settings_page():
+    """Render the settings page."""
+    st.title("⚙️ Settings")
+    
+    st.subheader("Threshold Configuration")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.number_input(
+            "Maximum Latency (ms)",
+            value=2000,
+            step=100,
+            help="Alert when average latency exceeds this maximum latency threshold"
+        )
+        
+        st.number_input(
+            f"Cost Threshold ({st.session_state.currency})",
+            value=10.0 * st.session_state.exchange_rate,
+            step=1.0 * st.session_state.exchange_rate,
+            help=f"Alert when total cost exceeds this value in {st.session_state.currency}"
+        )
+    
+    with col2:
+        st.number_input(
+            "Error Rate Threshold",
+            value=0.05,
+            min_value=0.0,
+            max_value=1.0,
+            step=0.01,
+            format="%.2f",
+            help="Alert when error rate exceeds this percentage"
+        )
+    
+>>>>>>> 5edcce0d2c7c8aae652a9ab458063df896f7212f
     st.markdown("---")
     _hdr("Database Management")
     c1, c2 = st.columns(2)
@@ -822,6 +1207,7 @@ def page_settings():
             st.warning("Export feature coming soon")
 
     st.markdown("---")
+<<<<<<< HEAD
     _hdr("System Information")
     with db_manager.session_scope() as s:
         c1, c2, c3 = st.columns(3)
@@ -854,12 +1240,41 @@ Your prompt → LLM call → Response
                     Next request uses better settings ← LOOP CLOSED
 ```
 """)
+=======
+    
+    st.subheader("System Information")
+    
+    with db_manager.session_scope() as session:
+        total_logs = session.query(TelemetryLog).count()
+        total_prompts = session.query(PromptVersion).count()
+        total_alerts = session.query(Alert).count()
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Total Telemetry Logs", f"{total_logs:,}")
+    
+    with col2:
+        st.metric("Total Prompt Versions", f"{total_prompts:,}")
+    
+    with col3:
+        st.metric("Total Alerts", f"{total_alerts:,}")
+        
+    st.markdown("---")
+    st.subheader("ℹ️ About")
+    st.info(
+        "**Telemetry-Aware Model Monitoring**\n\n"
+        "Real-time monitoring and optimization for LLM applications.\n\n"
+        "Track performance, optimize prompts, and detect anomalies."
+    )
+>>>>>>> 5edcce0d2c7c8aae652a9ab458063df896f7212f
 
 
 # ═══════════════════════════════════════════════════════════
 #  SIDEBAR + ROUTING
 # ═══════════════════════════════════════════════════════════
 def main():
+<<<<<<< HEAD
     _init()
 
     st.sidebar.title("⚡ PROMPT-OPS")
@@ -885,6 +1300,15 @@ def main():
     st.sidebar.caption("PROMPT-OPS v1.0 • Final Year Project 2025–26")
 
     # Route
+=======
+    """Main application entry point."""
+    init_session_state()
+    
+    # Header and navigation
+    page = render_header_and_nav()
+    
+    # Route to appropriate page
+>>>>>>> 5edcce0d2c7c8aae652a9ab458063df896f7212f
     if page == "📊 Dashboard Overview":
         page_dashboard_overview()
     elif page == "📈 Model Monitoring":
