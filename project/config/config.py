@@ -27,11 +27,11 @@ class Settings(BaseSettings):
         alias="OPENROUTER_BASE_URL",
     )
     openrouter_default_model: str = Field(
-        default="meta-llama/llama-3.3-8b-instruct:free",
+        default="meta-llama/llama-3.3-70b-instruct:free",
         alias="OPENROUTER_DEFAULT_MODEL",
     )
     openrouter_judge_model: str = Field(
-        default="meta-llama/llama-3.3-8b-instruct:free",
+        default="meta-llama/llama-3.3-70b-instruct:free",
         alias="OPENROUTER_JUDGE_MODEL",
     )
 
@@ -91,12 +91,14 @@ settings = Settings()
 
 # ── Free models available on OpenRouter ─────────────────────
 FREE_MODELS = [
-    "google/gemma-3-4b-it:free",                         # Tier 1 – small
-    "qwen/qwen3-8b:free",                                # Tier 2 – mid
-    "meta-llama/llama-3.3-8b-instruct:free",              # Tier 2 – mid (default)
-    "mistralai/mistral-small-3.1-24b-instruct:free",      # Tier 3 – larger
-    "deepseek/deepseek-chat-v3-0324:free",                # Tier 3 – larger
-    "microsoft/phi-4-reasoning:free",                     # Tier 4 – strongest
+    "google/gemma-3-4b-it:free",                          # Tier 1 – small/fast
+    "meta-llama/llama-3.2-3b-instruct:free",              # Tier 1 – small/fast
+    "meta-llama/llama-3.3-70b-instruct:free",             # Tier 2 – mid (default)
+    "mistralai/mistral-small-3.1-24b-instruct:free",      # Tier 2 – mid
+    "qwen/qwen3-4b:free",                                 # Tier 3 – larger
+    "nvidia/nemotron-nano-9b-v2:free",                    # Tier 3 – larger
+    "google/gemma-3-12b-it:free",                         # Tier 4 – strongest free
+    "google/gemma-3-27b-it:free",                         # Tier 4 – strongest free
 ]
 
 
@@ -104,17 +106,19 @@ FREE_MODELS = [
 MODEL_TIERS = {
     "tier_1": [
         "google/gemma-3-4b-it:free",
+        "meta-llama/llama-3.2-3b-instruct:free",
     ],
     "tier_2": [
-        "qwen/qwen3-8b:free",
-        "meta-llama/llama-3.3-8b-instruct:free",
+        "meta-llama/llama-3.3-70b-instruct:free",
+        "mistralai/mistral-small-3.1-24b-instruct:free",
     ],
     "tier_3": [
-        "mistralai/mistral-small-3.1-24b-instruct:free",
-        "deepseek/deepseek-chat-v3-0324:free",
+        "qwen/qwen3-4b:free",
+        "nvidia/nemotron-nano-9b-v2:free",
     ],
     "tier_4": [
-        "microsoft/phi-4-reasoning:free",
+        "google/gemma-3-12b-it:free",
+        "google/gemma-3-27b-it:free",
     ],
     "premium": [
         "openai/gpt-4o",
@@ -128,18 +132,20 @@ MODEL_TIERS = {
 # Free models all cost $0.  Premium models have real prices.
 MODEL_PRICING = {
     # Free tier – $0
-    "google/gemma-3-4b-it:free":                       {"input": 0.0, "output": 0.0},
-    "qwen/qwen3-8b:free":                              {"input": 0.0, "output": 0.0},
-    "meta-llama/llama-3.3-8b-instruct:free":            {"input": 0.0, "output": 0.0},
-    "mistralai/mistral-small-3.1-24b-instruct:free":    {"input": 0.0, "output": 0.0},
-    "deepseek/deepseek-chat-v3-0324:free":              {"input": 0.0, "output": 0.0},
-    "microsoft/phi-4-reasoning:free":                   {"input": 0.0, "output": 0.0},
+    "google/gemma-3-4b-it:free":                          {"input": 0.0, "output": 0.0},
+    "meta-llama/llama-3.2-3b-instruct:free":              {"input": 0.0, "output": 0.0},
+    "meta-llama/llama-3.3-70b-instruct:free":             {"input": 0.0, "output": 0.0},
+    "mistralai/mistral-small-3.1-24b-instruct:free":      {"input": 0.0, "output": 0.0},
+    "qwen/qwen3-4b:free":                                 {"input": 0.0, "output": 0.0},
+    "nvidia/nemotron-nano-9b-v2:free":                    {"input": 0.0, "output": 0.0},
+    "google/gemma-3-12b-it:free":                         {"input": 0.0, "output": 0.0},
+    "google/gemma-3-27b-it:free":                         {"input": 0.0, "output": 0.0},
     # Premium tier – approximate $/1k tokens
-    "openai/gpt-4o":                                   {"input": 0.005, "output": 0.015},
-    "openai/gpt-4o-mini":                              {"input": 0.00015, "output": 0.0006},
-    "anthropic/claude-sonnet-4":                        {"input": 0.003, "output": 0.015},
-    "google/gemini-2.0-flash-001":                     {"input": 0.0001, "output": 0.0004},
-    "google/gemini-2.5-pro-preview":                   {"input": 0.00125, "output": 0.01},
+    "openai/gpt-4o":                                      {"input": 0.005,  "output": 0.015},
+    "openai/gpt-4o-mini":                                 {"input": 0.00015,"output": 0.0006},
+    "anthropic/claude-sonnet-4":                          {"input": 0.003,  "output": 0.015},
+    "google/gemini-2.0-flash-001":                        {"input": 0.0001, "output": 0.0004},
+    "google/gemini-2.5-pro-preview":                      {"input": 0.00125,"output": 0.01},
 }
 
 

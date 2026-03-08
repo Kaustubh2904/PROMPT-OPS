@@ -309,7 +309,7 @@ def main():
      7. Optimizer recommended best prompt version
 
    Next → open the dashboard:
-     streamlit run dashboard/app.py
+     uv run streamlit run dashboard.py --server.port 8501
 """)
 
 

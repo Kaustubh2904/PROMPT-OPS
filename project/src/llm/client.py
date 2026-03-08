@@ -42,7 +42,7 @@ class LLMResponse:
 
     @property
     def success(self) -> bool:
-        return self.error is None and len(self.content) > 0
+        return self.error is None and bool(self.content)
 
 
 class LLMClient:

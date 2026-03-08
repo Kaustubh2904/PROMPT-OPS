@@ -14,6 +14,7 @@ simple requests while preserving quality for complex ones.
 """
 
 import uuid
+import time
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
@@ -117,69 +118,89 @@ class CostAwareRouter:
         eval_judge = ResponseEvaluator()
 
         for tier_name, models in tiers_to_try:
-            model = models[0] if models else preferred_model
+            # Try each model in the tier before escalating
+            tier_succeeded = False
+            for model in (models if models else [preferred_model]):
+                try:
+                    response = client.chat(
+                        prompt=prompt,
+                        model=model,
+                        temperature=temperature,
+                        system_prompt=system_prompt,
+                    )
 
-            try:
-                response = client.chat(
-                    prompt=prompt,
-                    model=model,
-                    temperature=temperature,
-                    system_prompt=system_prompt,
-                )
+                    if not response.success:
+                        error_str = str(response.error or "")
+                        if "429" in error_str:
+                            # Rate-limited — wait briefly and try next model in tier
+                            logger.warning(
+                                f"Tier {tier_name} ({model}) rate-limited (429), "
+                                f"trying next model in tier"
+                            )
+                            time.sleep(2)
+                            continue
+                        else:
+                            # Hard failure (404, 400) — skip this model
+                            logger.warning(
+                                f"Tier {tier_name} ({model}) failed ({error_str[:40]}), "
+                                f"trying next"
+                            )
+                            continue
 
-                if not response.success:
-                    logger.warning(f"Tier {tier_name} ({model}) failed, escalating")
+                    # Evaluate quality
+                    eval_score = eval_judge.evaluate(
+                        original_prompt=prompt,
+                        response=response.content,
+                    )
+
+                    quality = eval_score.composite_score
+
+                    # Update quality cache
+                    self._update_cache(prompt_id, tier_name, quality)
+
+                    if quality >= quality_threshold:
+                        # Quality is good enough — use this cheaper model!
+                        original_cost = self._estimate_cost(
+                            preferred_model, response.input_tokens, response.output_tokens
+                        )
+                        actual_cost = response.cost_usd
+                        cost_saved = max(0, original_cost - actual_cost)
+
+                        decision = RoutingDecision(
+                            routing_id=routing_id,
+                            prompt_id=prompt_id,
+                            original_model=preferred_model,
+                            routed_model=model,
+                            tier_used=tier_name,
+                            quality_score=quality,
+                            escalated=False,
+                            escalation_reason=None,
+                            cost_saved_usd=cost_saved,
+                            latency_ms=response.latency_ms,
+                            content=response.content,
+                        )
+                        self._save_routing_decision(decision)
+
+                        logger.info(
+                            f"Routed to {tier_name} ({model}): "
+                            f"quality={quality:.2f}, saved=${cost_saved:.4f}"
+                        )
+                        return decision
+
+                    else:
+                        logger.info(
+                            f"Tier {tier_name} quality too low ({quality:.2f} < {quality_threshold}), "
+                            f"escalating..."
+                        )
+                        tier_succeeded = True  # model worked, just quality was low
+                        break  # escalate to next tier
+
+                except Exception as e:
+                    logger.warning(f"Tier {tier_name} ({model}) error: {e}, trying next")
                     continue
 
-                # Evaluate quality
-                eval_score = eval_judge.evaluate(
-                    original_prompt=prompt,
-                    response=response.content,
-                )
-
-                quality = eval_score.composite_score
-
-                # Update quality cache
-                self._update_cache(prompt_id, tier_name, quality)
-
-                if quality >= quality_threshold:
-                    # Quality is good enough — use this cheaper model!
-                    original_cost = self._estimate_cost(
-                        preferred_model, response.input_tokens, response.output_tokens
-                    )
-                    actual_cost = response.cost_usd
-                    cost_saved = max(0, original_cost - actual_cost)
-
-                    decision = RoutingDecision(
-                        routing_id=routing_id,
-                        prompt_id=prompt_id,
-                        original_model=preferred_model,
-                        routed_model=model,
-                        tier_used=tier_name,
-                        quality_score=quality,
-                        escalated=False,
-                        escalation_reason=None,
-                        cost_saved_usd=cost_saved,
-                        latency_ms=response.latency_ms,
-                        content=response.content,
-                    )
-                    self._save_routing_decision(decision)
-
-                    logger.info(
-                        f"Routed to {tier_name} ({model}): "
-                        f"quality={quality:.2f}, saved=${cost_saved:.4f}"
-                    )
-                    return decision
-
-                else:
-                    logger.info(
-                        f"Tier {tier_name} quality too low ({quality:.2f} < {quality_threshold}), "
-                        f"escalating..."
-                    )
-
-            except Exception as e:
-                logger.warning(f"Tier {tier_name} error: {e}, escalating")
-                continue
+            if not tier_succeeded:
+                logger.warning(f"All models in tier {tier_name} failed, escalating")
 
         # All tiers failed or quality too low — use preferred model
         logger.info(f"Escalating to preferred model: {preferred_model}")
