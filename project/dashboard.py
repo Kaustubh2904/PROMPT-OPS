@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+    # -*- coding: utf-8 -*-
 """
 PROMPT-OPS Dashboard
 ====================
@@ -92,7 +92,7 @@ def sev_icon(s):
 # ── Sidebar ──────────────────────────────────────────────────────────────────
 
 with st.sidebar:
-    st.title(":zap: PROMPT-OPS")
+    st.title("PROMPT-OPS")
     st.caption("Closed-Loop LLM Monitoring")
     st.divider()
 
@@ -168,7 +168,7 @@ def get_cost_routing():
 # ============================================================================
 
 def page_playground():
-    st.header(":joystick: Live Playground")
+    st.header("Live Playground")
     st.caption(
         "Run a real LLM call through the full closed-loop pipeline — "
         "telemetry, evaluation, cost routing, and A/B testing all happen automatically."
@@ -183,8 +183,27 @@ def page_playground():
 
     from config import FREE_MODELS
 
-    # ── Input controls ───────────────────────────────────────────────────────
-    st.subheader("Configure your request")
+    # ── How It Works ─────────────────────────────────────────────────────────
+    with st.expander("📖 How does this playground work?", expanded=False):
+        st.markdown("""
+When you click **Run Pipeline**, your prompt passes through the full PROMPT-OPS closed-loop system in **6 automatic steps**:
+
+| # | Step | What happens |
+|---|------|-------------|
+| 1 | **Prompt Selection** | If a Prompt ID is set, A/B testing picks the best template version |
+| 2 | **Temperature Selection** | Uses optimal temperature from past experiments (or 0.7 default) |
+| 3 | **LLM Call** | Sends request to OpenRouter — optionally tries cheaper models first |
+| 4 | **Telemetry Recording** | Latency, tokens, cost, model, version — all logged to the database |
+| 5 | **Quality Evaluation** | A judge LLM scores the response on 5 dimensions (LLM-as-Judge) |
+| 6 | **Metrics Update** | Prompt version stats are updated for future A/B decisions |
+
+**Every run improves the system** — quality scores feed back into routing and prompt selection.
+        """)
+
+    st.divider()
+
+    # ── Step 1: Write your prompt ─────────────────────────────────────────────
+    st.subheader("① Write your prompt")
 
     col_inp, col_cfg = st.columns([3, 2])
 
@@ -193,40 +212,96 @@ def page_playground():
             "Your prompt / question",
             value="Explain what a closed-loop LLM system is and why it matters.",
             height=130,
+            help="This is the raw text sent to the LLM. If you pick a Prompt ID below, it will be inserted into that template.",
         )
         system_prompt = st.text_input(
             "System prompt (optional)",
             value="You are a helpful, concise assistant.",
+            help="Sets the persona/behaviour of the LLM before your prompt. Leave blank to use no system context.",
         )
 
+    # ── Step 2: Configure the pipeline ───────────────────────────────────────
     with col_cfg:
+        st.markdown("**② Configure the pipeline**")
+
         # Prompt ID selector — pull live versions from DB
         prompts_df = get_prompts()
-        prompt_ids = ["(none)"] + sorted(prompts_df["prompt_id"].dropna().unique().tolist()) \
+        prompt_ids = (
+            ["(none)"] + sorted(prompts_df["prompt_id"].dropna().unique().tolist())
             if not prompts_df.empty else ["(none)"]
-        sel_pid = st.selectbox("Prompt ID (A/B versioning)", prompt_ids)
+        )
+        sel_pid = st.selectbox(
+            "Prompt ID (A/B versioning)",
+            prompt_ids,
+            help=(
+                "Select a saved prompt template. The system will inject your input into the "
+                "template and A/B-test across its versions. Leave as '(none)' to send your "
+                "prompt directly with no template."
+            ),
+        )
         prompt_id = None if sel_pid == "(none)" else sel_pid
 
-        model = st.selectbox("Model", FREE_MODELS, index=2)
-        temperature = st.slider("Temperature", 0.0, 1.5, 0.7, 0.05)
+        # Show template preview when a prompt ID is selected
+        if prompt_id and not prompts_df.empty:
+            versions_for_pid = prompts_df[prompts_df["prompt_id"] == prompt_id].sort_values("version")
+            if not versions_for_pid.empty:
+                with st.expander(f"📋 Template preview — {len(versions_for_pid)} version(s)", expanded=False):
+                    for _, vrow in versions_for_pid.iterrows():
+                        st.markdown(
+                            f"**v{int(vrow['version'])}** — {vrow.get('name', '')} "
+                            f"{'✅ default' if vrow.get('is_default') else ''} "
+                            f"(weight: {vrow.get('traffic_weight', 1.0):.1f})"
+                        )
+                        tmpl = vrow.get("template", "")
+                        preview = tmpl.replace("{input}", "**[your prompt]**").replace("{text}", "**[your prompt]**")
+                        st.markdown(
+                            f"<div style='background:#0d1117;border:1px solid #30363d;border-radius:6px;"
+                            f"padding:10px 14px;font-size:0.82rem;white-space:pre-wrap;'>{preview}</div>",
+                            unsafe_allow_html=True,
+                        )
 
+        model = st.selectbox(
+            "Model",
+            FREE_MODELS,
+            index=2,
+            help="The LLM to call. If Cost Routing is ON, the system may use a cheaper model from a lower tier if quality is sufficient.",
+        )
+        temperature = st.slider(
+            "Temperature",
+            0.0, 1.5, 0.7, 0.05,
+            help="Controls randomness. 0 = deterministic, 1.5 = most creative. The system learns optimal temperature per prompt via experiments.",
+        )
+
+        st.markdown("**③ Toggle features**")
         c1, c2, c3 = st.columns(3)
-        enable_eval     = c1.toggle("Evaluate",     value=True)
-        enable_routing  = c2.toggle("Cost Routing",  value=False)
-        ab_testing      = c3.toggle("A/B Testing",   value=True)
+        enable_eval = c1.toggle(
+            "Evaluate",
+            value=True,
+            help="Runs LLM-as-Judge after the main call. A second LLM scores the response on 5 quality dimensions (0-1). Adds ~1-2s latency.",
+        )
+        enable_routing = c2.toggle(
+            "Cost Routing",
+            value=False,
+            help="Tries cheaper models first (Tier 1 to Tier 4) before using your selected model. Accepts the cheapest model whose quality score meets the threshold (default 0.6).",
+        )
+        ab_testing = c3.toggle(
+            "A/B Testing",
+            value=True,
+            help="When a Prompt ID is set, randomly selects between versions based on their traffic weights. Disabled = always uses the default version.",
+        )
 
     st.divider()
 
     # ── Run button ───────────────────────────────────────────────────────────
     run_col, _ = st.columns([1, 4])
-    run_clicked = run_col.button("Run pipeline", type="primary", use_container_width=True)
+    run_clicked = run_col.button("Run Pipeline", type="primary", use_container_width=True)
 
     if run_clicked:
         if not user_input.strip():
             st.warning("Please enter a prompt first.")
             return
 
-        with st.spinner("Running closed-loop pipeline…"):
+        with st.spinner("Running closed-loop pipeline..."):
             try:
                 from src.pipeline.orchestrator import PromptOpsPipeline
                 _pipe = PromptOpsPipeline()
@@ -248,14 +323,100 @@ def page_playground():
         st.success("Pipeline completed!")
         st.cache_data.clear()   # refresh cached tables so new record shows up
 
-        # ── Result columns ────────────────────────────────────────────────────
-        st.subheader("Results")
+        # ── Pipeline trace ───────────────────────────────────────────────────
+        with st.expander("Pipeline trace — what happened step by step?", expanded=True):
+            # Step 1: Prompt
+            if response.prompt_id and response.prompt_version:
+                st.markdown(f"✅ **Step 1 — Prompt selected:** `{response.prompt_id}` v{response.prompt_version} (A/B test picked this version)")
+            elif response.prompt_id:
+                st.markdown(f"✅ **Step 1 — Prompt selected:** `{response.prompt_id}` (default version)")
+            else:
+                st.markdown("✅ **Step 1 — Prompt:** Sent directly (no Prompt ID / no template applied)")
+
+            # Step 2: Temperature
+            st.markdown(
+                f"✅ **Step 2 — Temperature:** `{response.temperature}` "
+                + ("(from experiment)" if response.temperature != 0.7 else "(default — no experiment data yet)")
+            )
+
+            # Step 3: LLM call
+            if response.was_cost_routed:
+                st.markdown(
+                    f"✅ **Step 3 — LLM call (Cost Routing ON):** Tried cheaper tiers first → "
+                    f"settled on `{short(response.model)}` "
+                    f"(originally requested `{short(response.original_model)}`)"
+                )
+            else:
+                st.markdown(f"✅ **Step 3 — LLM call:** `{short(response.model)}` — took **{response.latency_ms:.0f} ms**")
+
+            # Step 4: Telemetry
+            st.markdown(
+                f"✅ **Step 4 — Telemetry recorded:** `{response.request_id}` — "
+                f"{response.input_tokens + response.output_tokens:,} tokens | "
+                f"cost ${response.cost_usd:.6f}"
+            )
+
+            # Step 5: Evaluation
+            if response.quality_score is not None:
+                q = response.quality_score
+                q_color = "#22c55e" if q >= 0.7 else "#f59e0b" if q >= 0.5 else "#ef4444"
+                q_label = "Good" if q >= 0.7 else "Fair" if q >= 0.5 else "Poor"
+                st.markdown(
+                    f"✅ **Step 5 — Quality evaluated:** composite score "
+                    f"<span style='color:{q_color};font-weight:700;'>{q:.3f} ({q_label})</span> "
+                    f"via LLM-as-Judge",
+                    unsafe_allow_html=True,
+                )
+            elif enable_eval:
+                st.markdown("⚠️ **Step 5 — Evaluation:** Judge model returned no score (API issue or rate limit)")
+            else:
+                st.markdown("⬜ **Step 5 — Evaluation:** Skipped (toggle was OFF)")
+
+            # Step 6: Metrics update
+            if response.prompt_id:
+                st.markdown(f"✅ **Step 6 — Metrics updated:** `{response.prompt_id}` v{response.prompt_version} stats recalculated")
+            else:
+                st.markdown("⬜ **Step 6 — Metrics update:** Skipped (no Prompt ID set)")
+
+        st.divider()
+
+        # ── KPI metrics ──────────────────────────────────────────────────────
+        st.subheader("Results at a glance")
+
+        q_val = response.quality_score
+        if q_val is not None:
+            q_color = "#22c55e" if q_val >= 0.7 else "#f59e0b" if q_val >= 0.5 else "#ef4444"
+            q_label = f"{q_val:.3f}"
+        else:
+            q_color = "#888"
+            q_label = "—"
+
         r1, r2, r3, r4, r5 = st.columns(5)
         r1.metric("Latency",       f"{response.latency_ms:.0f} ms")
         r2.metric("Tokens",        f"{response.input_tokens + response.output_tokens:,}")
         r3.metric("Cost",          f"${response.cost_usd:.6f}")
-        r4.metric("Quality Score", f"{response.quality_score:.3f}" if response.quality_score is not None else "—")
+        r4.metric("Quality Score", q_label)
         r5.metric("Cost Saved",    f"${response.cost_saved_usd:.6f}")
+
+        # Color badge for quality
+        if q_val and q_val >= 0.7:
+            badge_text = "Quality: Good"
+            badge_icon = "✅"
+        elif q_val and q_val >= 0.5:
+            badge_text = "Quality: Fair"
+            badge_icon = "⚠️"
+        elif q_val:
+            badge_text = "Quality: Poor"
+            badge_icon = "❌"
+        else:
+            badge_text = "Quality: Not evaluated"
+            badge_icon = "⚪"
+        st.markdown(
+            f"<div style='display:inline-block;background:{q_color}22;border:1px solid {q_color};"
+            f"border-radius:20px;padding:3px 14px;font-size:0.82rem;color:{q_color};margin-bottom:8px;'>"
+            f"{badge_icon} {badge_text}</div>",
+            unsafe_allow_html=True,
+        )
 
         st.divider()
 
@@ -265,12 +426,11 @@ def page_playground():
         with left:
             st.subheader("Response")
 
-            # Show prompt info banner
             info_parts = [f"Model: `{short(response.model)}`"]
             if response.prompt_id:
                 info_parts.append(f"Prompt: `{response.prompt_id}` v{response.prompt_version}")
             if response.was_cost_routed:
-                info_parts.append(f"Routed from `{short(response.original_model)}`")
+                info_parts.append(f"Routed from `{short(response.original_model)}` (cost saving)")
             st.caption("  |  ".join(info_parts))
 
             st.markdown(
@@ -294,16 +454,15 @@ def page_playground():
 
             eval_details = response.evaluation_details or {}
             dims = {
-                "Relevance":         eval_details.get("relevance",          None),
-                "Accuracy":          eval_details.get("accuracy",           None),
-                "Completeness":      eval_details.get("completeness",       None),
-                "Format":            eval_details.get("format_compliance",  None),
-                "Safety":            eval_details.get("safety",             None),
+                "Relevance":    eval_details.get("relevance",         None),
+                "Accuracy":     eval_details.get("accuracy",          None),
+                "Completeness": eval_details.get("completeness",      None),
+                "Format":       eval_details.get("format_compliance", None),
+                "Safety":       eval_details.get("safety",            None),
             }
             filled = {k: v for k, v in dims.items() if v is not None}
 
             if filled:
-                # Radar chart
                 categories = list(filled.keys())
                 values     = list(filled.values())
                 fig = go.Figure(go.Scatterpolar(
@@ -316,21 +475,27 @@ def page_playground():
                 ))
                 fig.update_layout(
                     polar=dict(radialaxis=dict(range=[0, 1], tickfont=dict(size=9))),
-                    height=280,
+                    height=260,
                     margin=dict(l=20, r=20, t=20, b=20),
                     showlegend=False,
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
-                # Individual score bars
+                dim_help = {
+                    "Relevance":    "Does the response directly answer the question?",
+                    "Accuracy":     "Is the information factually correct?",
+                    "Completeness": "Are the key points sufficiently covered?",
+                    "Format":       "Does it follow length / format instructions?",
+                    "Safety":       "Free from harmful or inappropriate content?",
+                }
                 for dim, val in filled.items():
                     bar_color = "#22c55e" if val >= 0.7 else "#f59e0b" if val >= 0.5 else "#ef4444"
                     st.markdown(
-                        f"""<div style="margin-bottom:6px;">
+                        f"""<div style="margin-bottom:6px;" title="{dim_help.get(dim, '')}">
                             <div style="display:flex;justify-content:space-between;
                                         font-size:0.82rem;margin-bottom:2px;">
                                 <span>{dim}</span>
-                                <span style="font-weight:600;">{val:.2f}</span>
+                                <span style="font-weight:600;color:{bar_color};">{val:.2f}</span>
                             </div>
                             <div style="background:#1e1e2e;border-radius:4px;height:7px;">
                                 <div style="width:{val*100:.1f}%;background:{bar_color};
@@ -340,6 +505,13 @@ def page_playground():
                         unsafe_allow_html=True,
                     )
 
+                judge_model_name = eval_details.get("judge_model", "")
+                judge_ms         = eval_details.get("judge_latency_ms")
+                judge_info       = f"Judge: `{short(judge_model_name)}`"
+                if judge_ms:
+                    judge_info += f" — {judge_ms:.0f} ms"
+                st.caption(judge_info)
+
                 if eval_details.get("reasoning"):
                     with st.expander("Judge reasoning"):
                         st.caption(eval_details["reasoning"])
@@ -347,10 +519,55 @@ def page_playground():
                 if enable_eval:
                     st.info("Evaluation data not returned by this model.")
                 else:
-                    st.info("Enable **Evaluate** toggle to see quality breakdown.")
+                    st.info("Enable the **Evaluate** toggle to see quality breakdown.")
+
+        # ── What did the system do? ───────────────────────────────────────────
+        with st.expander("What did the system actually do? (plain English)", expanded=False):
+            parts = []
+
+            if response.prompt_id:
+                parts.append(
+                    f"Your input was wrapped in the **`{response.prompt_id}`** prompt template "
+                    f"(version {response.prompt_version}, selected by A/B traffic weighting)."
+                )
+            else:
+                parts.append("Your input was sent directly to the LLM with no template applied.")
+
+            if response.was_cost_routed:
+                parts.append(
+                    f"The Cost Router tried cheaper models first and found that "
+                    f"**`{short(response.model)}`** produced acceptable quality, "
+                    f"saving **${response.cost_saved_usd:.6f}** vs your originally requested model."
+                )
+            else:
+                parts.append(f"The request was sent to **`{short(response.model)}`** directly (cost routing was off).")
+
+            parts.append(
+                f"Temperature was set to **{response.temperature}** "
+                + ("based on previous optimization experiments for this prompt."
+                   if response.temperature != 0.7
+                   else "(the default — run a temperature experiment to find the optimal value).")
+            )
+
+            if response.quality_score is not None:
+                q = response.quality_score
+                verdict = (
+                    "above the quality threshold — this is a good response." if q >= 0.7
+                    else "below the quality threshold — consider refining the prompt." if q < 0.5
+                    else "borderline — acceptable but could be improved."
+                )
+                parts.append(f"The LLM-as-Judge scored this response **{q:.3f}/1.0**, which is {verdict}")
+
+            parts.append(
+                f"All metrics (latency, tokens, cost, quality) were saved to the database under "
+                f"request ID `{response.request_id}`. You can see this entry on the **Telemetry** page."
+            )
+
+            for p in parts:
+                st.markdown(f"- {p}")
 
         # ── Request metadata ─────────────────────────────────────────────────
-        with st.expander("Request metadata"):
+        with st.expander("Raw request metadata (debug)"):
             st.json(response.to_dict())
 
 
@@ -359,7 +576,7 @@ def page_playground():
 # ============================================================================
 
 def page_overview():
-    st.header(":bar_chart: System Overview")
+    st.header("System Overview")
 
     tele = get_telemetry(time_window)
     alerts_df = get_alerts(time_window)
@@ -459,7 +676,7 @@ def page_overview():
 # ============================================================================
 
 def page_telemetry():
-    st.header(":satellite: Raw Telemetry Logs")
+    st.header("Raw Telemetry Logs")
 
     tele = get_telemetry(time_window)
     if tele.empty:
@@ -534,7 +751,7 @@ def page_telemetry():
 # ============================================================================
 
 def page_model_stats():
-    st.header(":robot_face: Model Performance Stats")
+    st.header("Model Performance Stats")
 
     tele = get_telemetry(time_window)
     if tele.empty:
@@ -631,7 +848,7 @@ def page_model_stats():
 # ============================================================================
 
 def page_prompts():
-    st.header(":memo: Prompt Versions & A/B Testing")
+    st.header("Prompt Versions & A/B Testing")
 
     df = get_prompts()
     if df.empty:
@@ -688,7 +905,7 @@ def page_prompts():
 # ============================================================================
 
 def page_evaluations():
-    st.header(":star: LLM-as-Judge Evaluations")
+    st.header("LLM-as-Judge Evaluations")
 
     df = get_evaluations()
     if df.empty:
@@ -769,7 +986,7 @@ def page_evaluations():
 # ============================================================================
 
 def page_cost_routing():
-    st.header(":money_with_wings: Cost-Aware Routing")
+    st.header("Cost-Aware Routing")
 
     df = get_cost_routing()
     if df.empty:
@@ -831,7 +1048,7 @@ def page_cost_routing():
 # ============================================================================
 
 def page_temperature():
-    st.header(":thermometer: Temperature Optimisation Experiments")
+    st.header("Temperature Optimisation Experiments")
 
     df = get_temp_experiments()
     if df.empty:
@@ -909,7 +1126,7 @@ def page_temperature():
 # ============================================================================
 
 def page_alerts():
-    st.header(":bell: Alerts & Threshold Violations")
+    st.header("Alerts & Threshold Violations")
 
     df = get_alerts(time_window)
     if df.empty:
@@ -989,7 +1206,7 @@ def page_alerts():
 # ============================================================================
 
 def page_optimisation():
-    st.header(":wrench: Prompt Optimisation Runs")
+    st.header("Prompt Optimisation Runs")
 
     df = get_opt_runs()
     if df.empty:
